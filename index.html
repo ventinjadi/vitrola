@@ -32,7 +32,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-vis
 </head>
 <body>
 <div id="authView" class="auth">
-  <form id="loginForm" class="authbox" onsubmit="return window.vitrolaSubmit(event)">
+  <form id="loginForm" class="authbox">
     <div class="authbrand"><div class="mark"><svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="4" y="8" width="32" height="25" rx="4" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="20" r="8" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="20" r="2" fill="currentColor"/><path d="M28 12v8l-5 5M27 12l3 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 29h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div><div><h1>Vitrola</h1><p>SUA BIBLIOTECA MUSICAL</p></div></div>
     <h2>Entre no seu acervo</h2><p>Use a mesma conta do Cultivo e do Maré para manter tudo sincronizado.</p>
     <div class="field"><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required></div>
@@ -56,39 +56,6 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-vis
 <div id="modalback" class="modalback"><div class="modal" id="modal"></div></div>
 <div id="toast" class="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
-<script>
-window.vitrolaSubmit = async function(event) {
-  event.preventDefault();
-  const button = document.getElementById('loginBtn');
-  const message = document.getElementById('loginError');
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  button.disabled = true;
-  button.textContent = 'Entrando…';
-  message.textContent = 'Conectando à sua biblioteca…';
-  try {
-    if (!window.supabase || !window.supabase.createClient) {
-      throw new Error('O serviço de autenticação não carregou. Atualize a página e tente novamente.');
-    }
-    const client = window.supabase.createClient(
-      'https://xnqhbicvmjzqxzqnatqp.supabase.co',
-      'sb_publishable_mVvI7bFqNltSEXdX_qjPGw_zyK8v6Q4'
-    );
-    const result = await client.auth.signInWithPassword({ email, password });
-    if (result.error) throw result.error;
-    message.textContent = 'Login confirmado. Abrindo sua Vitrola…';
-    window.location.reload();
-  } catch (error) {
-    message.textContent = error && error.message ? error.message : 'Não foi possível entrar. Tente novamente.';
-    button.disabled = false;
-    button.textContent = 'Entrar';
-  }
-};
-window.addEventListener('error', function(event) {
-  const message = document.getElementById('loginError');
-  if (message && !message.textContent) message.textContent = 'Erro ao iniciar: ' + (event.message || 'falha no aplicativo');
-});
-</script>
 <script>
 (function(){
 'use strict';
@@ -215,8 +182,55 @@ $('logoutBtn').onclick=async()=>{await sb.auth.signOut();user=null;$('appView').
 $('modalback').onclick=e=>{if(e.target===$('modalback'))closeModal()};
 
 }
-async function start(u){user=u;$('authView').hidden=true;$('appView').hidden=false;$('userEmail').textContent=u.email||'Conta conectada';try{await ensureLists();await loadData();bind()}catch(e){$('main').innerHTML='<div class="empty"><strong>Não foi possível carregar o acervo.</strong>'+esc(e.message||e)+'</div>';console.error(e)}}
-async function init(){bind();let {data}=await sb.auth.getSession();if(data.session?.user)await start(data.session.user)}
+async function start(u){
+  user=u;
+  $('userEmail').textContent=u.email||'Conta conectada';
+  $('loginError').textContent='Carregando sua biblioteca…';
+  try{
+    await ensureLists();
+    await loadData(false);
+    $('authView').hidden=true;
+    $('appView').hidden=false;
+    render();
+    $('loginError').textContent='';
+    bind();
+  }catch(e){
+    user=null;
+    $('authView').hidden=false;
+    $('appView').hidden=true;
+    $('loginError').textContent='Sua conta entrou, mas não consegui carregar os dados: '+(e.message||e);
+    console.error(e);
+  }
+}
+async function init(){
+  bind();
+  $('loginForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const button=$('loginBtn');
+    const message=$('loginError');
+    button.disabled=true;
+    button.textContent='Entrando…';
+    message.textContent='Verificando seus dados…';
+    try{
+      const {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+      if(error)throw error;
+      if(!data.user)throw new Error('O serviço não retornou uma conta autenticada.');
+      await start(data.user);
+    }catch(err){
+      message.textContent=err.message||'Não foi possível entrar. Tente novamente.';
+    }finally{
+      button.disabled=false;
+      button.textContent='Entrar';
+    }
+  });
+  try{
+    const {data,error}=await sb.auth.getSession();
+    if(error)throw error;
+    if(data.session?.user)await start(data.session.user);
+  }catch(err){
+    $('loginError').textContent='Erro ao iniciar a autenticação: '+(err.message||err);
+  }
+}
 init();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(()=>{}));}
 })();
