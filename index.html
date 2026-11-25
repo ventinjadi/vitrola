@@ -32,12 +32,12 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-vis
 </head>
 <body>
 <div id="authView" class="auth">
-  <form id="loginForm" class="authbox">
+  <form id="loginForm" class="authbox" onsubmit="return window.vitrolaSubmit(event)">
     <div class="authbrand"><div class="mark"><svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="4" y="8" width="32" height="25" rx="4" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="20" r="8" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="20" r="2" fill="currentColor"/><path d="M28 12v8l-5 5M27 12l3 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 29h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div><div><h1>Vitrola</h1><p>SUA BIBLIOTECA MUSICAL</p></div></div>
     <h2>Entre no seu acervo</h2><p>Use a mesma conta do Cultivo e do Maré para manter tudo sincronizado.</p>
     <div class="field"><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required></div>
     <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="current-password" required></div>
-    <button class="btn primary" style="width:100%" id="loginBtn">Entrar</button>
+    <button type="submit" class="btn primary" style="width:100%" id="loginBtn">Entrar</button>
     <div id="loginError" class="error"></div>
     <div class="foot">Um lugar para ouvir com atenção.</div>
   </form>
@@ -56,6 +56,39 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-vis
 <div id="modalback" class="modalback"><div class="modal" id="modal"></div></div>
 <div id="toast" class="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+<script>
+window.vitrolaSubmit = async function(event) {
+  event.preventDefault();
+  const button = document.getElementById('loginBtn');
+  const message = document.getElementById('loginError');
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  button.disabled = true;
+  button.textContent = 'Entrando…';
+  message.textContent = 'Conectando à sua biblioteca…';
+  try {
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error('O serviço de autenticação não carregou. Atualize a página e tente novamente.');
+    }
+    const client = window.supabase.createClient(
+      'https://xnqhbicvmjzqxzqnatqp.supabase.co',
+      'sb_publishable_mVvI7bFqNltSEXdX_qjPGw_zyK8v6Q4'
+    );
+    const result = await client.auth.signInWithPassword({ email, password });
+    if (result.error) throw result.error;
+    message.textContent = 'Login confirmado. Abrindo sua Vitrola…';
+    window.location.reload();
+  } catch (error) {
+    message.textContent = error && error.message ? error.message : 'Não foi possível entrar. Tente novamente.';
+    button.disabled = false;
+    button.textContent = 'Entrar';
+  }
+};
+window.addEventListener('error', function(event) {
+  const message = document.getElementById('loginError');
+  if (message && !message.textContent) message.textContent = 'Erro ao iniciar: ' + (event.message || 'falha no aplicativo');
+});
+</script>
 <script>
 (function(){
 'use strict';
@@ -180,7 +213,7 @@ $('main').onchange=async e=>{if(e.target.matches('[data-rating]'))await saveRati
 $('main').oninput=e=>{if(e.target.id==='albumSearch'){query=e.target.value;let arr=albums.filter(a=>(a.title+' '+a.artist).toLowerCase().includes(query.toLowerCase()));$('albumGrid').innerHTML=arr.length?arr.map(albumCard).join(''):'<div class="empty">Nenhum resultado.</div>'}};
 $('logoutBtn').onclick=async()=>{await sb.auth.signOut();user=null;$('appView').hidden=true;$('authView').hidden=false};
 $('modalback').onclick=e=>{if(e.target===$('modalback'))closeModal()};
-$('loginForm').onsubmit=async e=>{e.preventDefault();$('loginBtn').disabled=true;$('loginError').textContent='';let {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('loginBtn').disabled=false;if(error){$('loginError').textContent=error.message;return}await start(data.user)};
+
 }
 async function start(u){user=u;$('authView').hidden=true;$('appView').hidden=false;$('userEmail').textContent=u.email||'Conta conectada';try{await ensureLists();await loadData();bind()}catch(e){$('main').innerHTML='<div class="empty"><strong>Não foi possível carregar o acervo.</strong>'+esc(e.message||e)+'</div>';console.error(e)}}
 async function init(){bind();let {data}=await sb.auth.getSession();if(data.session?.user)await start(data.session.user)}
