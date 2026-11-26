@@ -29,7 +29,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-vis
 @media(max-width:680px){.shell{padding:16px 14px 85px}.top{align-items:flex-start}.brand h1{font-size:22px}.mark{width:47px;height:47px;border-radius:15px}.userpill{display:none}.hero{grid-template-columns:1fr}.hero-main{min-height:185px;padding:20px}.hero h2{font-size:29px}.hero-art{width:130px;height:130px;right:8px}.stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.stat{padding:12px 9px;min-height:80px}.stat strong{font-size:23px}.stat span{font-size:9px}.albumgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.albuminfo{padding:9px}.albumtitle{font-size:12px}.playlistgrid{grid-template-columns:1fr}.sectionhead{align-items:flex-start;flex-direction:column}.search{min-width:0;width:100%}.detailhero{grid-template-columns:118px 1fr;gap:14px}.detailhero h2{font-size:22px}.bigscore{font-size:27px}.track{grid-template-columns:22px minmax(0,1fr) 76px 27px;gap:6px}.two{grid-template-columns:1fr 1fr}.checks{grid-template-columns:1fr}.topright .btn{padding:8px 10px;font-size:11px}}
 @media(max-width:380px){.stats{grid-template-columns:repeat(2,1fr)}.detailhero{grid-template-columns:1fr}.detailhero img{width:160px}}
 .artistgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.artistcard{display:grid;grid-template-columns:64px minmax(0,1fr) 14px;gap:12px;align-items:center;text-align:left;padding:12px;background:#162d36;color:var(--ink);border:1px solid var(--line);border-radius:15px}.artistcard strong,.artistcard small{display:block}.artistcard small{color:var(--muted);margin-top:5px;font-size:11px}.artistart{width:64px;height:64px;overflow:hidden;border-radius:9px}.artistart .cover{width:64px;height:64px;object-fit:contain}.artistcard:hover{border-color:var(--teal)}@media(max-width:680px){.artistgrid{grid-template-columns:1fr}}
-</style>
+.applepromo{width:100%;display:flex;flex-direction:column;align-items:center;gap:5px}.applepromo a:first-child{width:100%;display:block}.applepromo .cover{width:100%;height:auto;aspect-ratio:1;object-fit:contain}.applepromo .itunesbadge{width:112px!important;height:auto!important;aspect-ratio:auto!important;object-fit:contain!important;border-radius:0!important}.applepromo a:last-child{display:flex;justify-content:center}</style>
 </head>
 <body>
 <div id="authView" class="auth">
@@ -154,17 +154,17 @@ function spotifyIntegration(){
 }
 const sp=spotifyIntegration();
 function musicbrainzIntegration(){
- let busy=false,stop=false,last=0;const matched=new Map();
+ let busy=false,stop=false,last=0;const matched=new Map(),paused=new Map();
  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
- const need=a=>!isFuture(a)&&(!albumTracks(a.id).length||(!a.cover_url&&!a.musicbrainz_cover_checked));
+ const need=a=>!isFuture(a)&&(!albumTracks(a.id).length||(!hasArt(a)&&!a.musicbrainz_cover_checked));
  const queue=()=>albums.filter(a=>need(a)&&!a.musicbrainz_review);
- const reviewed=()=>albums.filter(a=>!isFuture(a)&&(a.musicbrainz_review||(!a.cover_url&&a.musicbrainz_cover_checked)));
- const ready=()=>albums.filter(a=>!isFuture(a)&&a.cover_url&&albumTracks(a.id).length).length;
+ const reviewed=()=>albums.filter(a=>!isFuture(a)&&(a.musicbrainz_review||(!hasArt(a)&&a.musicbrainz_cover_checked)));
+ const ready=()=>albums.filter(a=>!isFuture(a)&&hasArt(a)&&albumTracks(a.id).length).length;
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  async function request(body){
-  const waits=[15000,45000];let lastError;
+  const waits=body.action.startsWith('itunes-')?[15000]:[];let lastError;
   for(let attempt=0;attempt<=waits.length;attempt++){
-   const wait=Math.max(0,3500-(Date.now()-last));if(wait)await sleep(wait);
+   const wait=Math.max(0,4000-(Date.now()-last));if(wait)await sleep(wait);
    if(stop||!user){const e=Error('Importação interrompida.');e.transient=true;throw e}
    last=Date.now();
    try{
@@ -195,7 +195,7 @@ function musicbrainzIntegration(){
   if(old.length&&!sameTracks(old,d.tracks))throw Error('A edição possui uma lista de faixas diferente da já cadastrada. As avaliações foram preservadas.');
   const year=d.group_year||d.year;
   if(a.release_year&&year&&Number(a.release_year)!==Number(year)&&!manual)throw Error('Ano divergente; escolha a edição manualmente.');
-  let payload={musicbrainz_release_id:d.id,musicbrainz_group_id:d.group_id||null,musicbrainz_cover_checked:!!d.cover_checked,musicbrainz_review:null};
+  let payload=d.source==='itunes'?{itunes_collection_id:d.id,itunes_url:d.itunes_url||null,itunes_cover_url:d.itunes_cover_url||null,musicbrainz_review:null}:{musicbrainz_release_id:d.id,musicbrainz_group_id:d.group_id||null,musicbrainz_cover_checked:!!d.cover_checked,musicbrainz_review:null};
   if(!a.release_year&&year)payload.release_year=year;
   if(!a.cover_url&&d.cover_url)payload.cover_url=d.cover_url;
   if(!a.spotify_url&&d.spotify_url)payload.spotify_url=d.spotify_url;
@@ -203,31 +203,47 @@ function musicbrainzIntegration(){
    const rows=d.tracks.map((t,i)=>({user_id:user.id,album_id:a.id,title:t.title,position:i+1}));
    const r=await sb.from('discos_tracks').insert(rows).select();if(r.error)throw r.error;tracks.push(...(r.data||[]));
   }
-  if(!d.cover_url&&!a.cover_url&&!d.cover_checked)payload.musicbrainz_review='Não foi possível verificar a capa. Tente revisar mais tarde.';
+  if(d.source!=='itunes'&&!d.cover_url&&!hasArt(a)&&!d.cover_checked)payload.musicbrainz_review='Não foi possível verificar a capa. Tente revisar mais tarde.';
   await update(a,payload);
  }
+ async function provider(name,fn){
+  const until=paused.get(name)||0;if(until>Date.now()){const e=Error(name+' temporariamente indisponível');e.transient=true;throw e}
+  try{return await fn()}catch(e){if(e.transient&&!stop){paused.set(name,Date.now()+Math.max(120000,Number(e.retryAfter||0)*1000));}throw e}
+ }
  async function lookup(a){
-  if(a.musicbrainz_release_id||matched.has(a.id))return request({action:'detail',id:a.musicbrainz_release_id||matched.get(a.id)});
-  const r=await request({action:'search',title:a.title,artist:a.artist,year:a.release_year});
-  if(!r.match)return {review:r.reason||'Sem edição segura.'};
-  matched.set(a.id,r.match.id);return request({action:'detail',id:r.match.id});
+  let transient=false,reason=[];
+  if(!a.musicbrainz_release_id&&!a.itunes_collection_id&&!albumTracks(a.id).length){
+   try{
+    const apple=await provider('iTunes',()=>request({action:'itunes-search',title:a.title,artist:a.artist,year:a.release_year}));
+    if(apple.match){const d=await provider('iTunes',()=>request({action:'itunes-detail',id:apple.match.id}));return d}
+    reason.push(apple.reason||'Sem edição segura no iTunes.');
+   }catch(e){if(stop||!user)throw e;if(e.transient)transient=true;reason.push(e.message)}
+  }
+  try{
+   if(a.musicbrainz_release_id||matched.has(a.id))return await provider('MusicBrainz',()=>request({action:'detail',id:a.musicbrainz_release_id||matched.get(a.id)}));
+   const r=await provider('MusicBrainz',()=>request({action:'search',title:a.title,artist:a.artist,year:a.release_year}));
+   if(r.match){matched.set(a.id,r.match.id);return await provider('MusicBrainz',()=>request({action:'detail',id:r.match.id}))}
+   reason.push(r.reason||'Sem edição segura no MusicBrainz.');
+  }catch(e){if(stop||!user)throw e;if(e.transient)transient=true;reason.push(e.message)}
+  if(transient)return {deferred:true,reason:reason.join(' · ')};
+  return {review:reason.join(' · ')||'Sem edição segura.'};
  }
  function statusLine(){return ready()+' álbuns com capa e faixas · '+queue().length+' na fila · '+reviewed().length+' para revisão'}
  function panel(target=null){
   if(busy||sp.isBusy()){toast('Aguarde a importação atual.');return}stop=false;
-  modal('<h2>Catálogo musical</h2><p>MusicBrainz + Cover Art Archive · não utiliza a cota do Spotify.</p><p class="hint" id="mbStatus">'+esc(statusLine())+'</p><div id="mbMsg" class="hint" style="margin:14px 0;white-space:pre-wrap" role="status"></div><div class="row">'+(target?'<button id="mbFind" class="btn primary">Buscar edição de '+esc(target.title)+'</button>':'<button id="mbSync" class="btn primary">Completar álbuns pendentes</button><button id="mbReview" class="btn ghost">Revisar pendências</button>')+'<button id="mbStop" class="btn" hidden>Parar</button></div><div id="mbResults"></div><div class="modalactions"><button id="mbBack" class="btn ghost">Voltar</button></div>');
+  modal('<h2>Catálogo musical</h2><p>iTunes + MusicBrainz + Cover Art Archive · sem usar a cota do Spotify.</p><p class="hint" id="mbStatus">'+esc(statusLine())+'</p><div id="mbMsg" class="hint" style="margin:14px 0;white-space:pre-wrap" role="status"></div><div class="row">'+(target?'<button id="mbFind" class="btn primary">Buscar edição de '+esc(target.title)+'</button>':'<button id="mbSync" class="btn primary">Completar álbuns pendentes</button><button id="mbReview" class="btn ghost">Revisar pendências</button>')+'<button id="mbStop" class="btn" hidden>Parar</button></div><div id="mbResults"></div><div class="modalactions"><button id="mbBack" class="btn ghost">Voltar</button></div>');
   $('mbBack').onclick=()=>{if(busy){stop=true;return}closeModal()};$('mbStop').onclick=()=>{stop=true;$('mbMsg').textContent+=' — interrompendo…'};
   if(target)$('mbFind').onclick=()=>find(target);else{$('mbSync').onclick=()=>sync();$('mbReview').onclick=()=>showReview()}
  }
  async function sync(){
-  if(busy||sp.isBusy())return;busy=true;stop=false;const q=queue().slice(),m=$('mbMsg');let done=0,review=0,i=0;
+  if(busy||sp.isBusy())return;busy=true;stop=false;const q=queue().slice(),m=$('mbMsg');let done=0,review=0,i=0,deferred=0;
   $('mbSync').disabled=true;$('mbStop').hidden=false;
-  try{for(const a of q){if(stop||!user)break;i++;m.textContent='Álbum '+i+'/'+q.length+' · '+a.artist+' — '+a.title+'\nImportados: '+done+' · Revisão: '+review;
-    try{const d=await lookup(a);if(d.review){await update(a,{musicbrainz_review:d.review});review++;continue}await apply(a,d);done++}
-    catch(e){if(stop||e.transient||!user)throw e;await update(a,{musicbrainz_review:e.message||'Erro de importação'});review++}
+  try{for(const a of q){if(stop||!user)break;i++;m.textContent='Álbum '+i+'/'+q.length+' · '+a.artist+' — '+a.title+'\nImportados: '+done+' · Revisão: '+review+' · Adiados: '+deferred;
+    try{const d=await lookup(a);if(d.deferred){deferred++;m.textContent+='\nConsulta adiada: '+d.reason; if((paused.get('iTunes')||0)>Date.now()&&(paused.get('MusicBrainz')||0)>Date.now()){m.textContent+='\nAs duas fontes estão em pausa.';break}continue}if(d.review){await update(a,{musicbrainz_review:d.review});review++;continue}await apply(a,d);done++}
+    catch(e){if(stop||!user)throw e;if(e.transient){deferred++;continue}await update(a,{musicbrainz_review:e.message||'Erro de importação'});review++}
     if($('mbStatus'))$('mbStatus').textContent=statusLine();await sleep(2000);
    }
-   m.textContent=(stop?'Interrompido. ':'Importação finalizada. ')+'Importados: '+done+' · Revisão: '+review+'. '+statusLine();
+   m.textContent=(stop?'Interrompido. ':'Importação finalizada. ')+'Importados: '+done+' · Revisão: '+review+' · Adiados por indisponibilidade: '+deferred+'. '+statusLine();
   }catch(e){m.textContent=(stop?'Importação interrompida.':e.transient?'O catálogo continua indisponível após as tentativas. '+e.message:'Erro: '+e.message)+' Importados nesta sessão: '+done+'. O progresso foi salvo. Retome pelo mesmo botão.'}
   finally{busy=false;if($('mbStatus'))$('mbStatus').textContent=statusLine();if($('mbSync'))$('mbSync').disabled=false;if($('mbStop'))$('mbStop').hidden=true;if(user)render()}
  }
@@ -243,20 +259,20 @@ function musicbrainzIntegration(){
   if(r.groups?.length){box.innerHTML=r.groups.map(g=>'<div class="track" style="grid-template-columns:minmax(0,1fr) auto"><div class="trackname"><strong>'+esc(g.title)+'</strong><small>'+esc(g.artist)+' · '+esc(g.year||'')+'</small></div><button class="btn small" data-mb-group="'+g.id+'">Ver edições</button></div>').join('');
    box.onclick=async e=>{const b=e.target.closest('[data-mb-group]');if(!b||busy)return;busy=true;try{const result=await request({action:'group',id:b.dataset.mbGroup,title:a.title,artist:a.artist,year:a.release_year});showChoices(a,result)}catch(e){m.textContent=e.message}finally{busy=false}};return}
   const items=r.choices||[];
-  box.innerHTML=(items.length?items.map((x,i)=>'<div class="track" style="grid-template-columns:minmax(0,1fr) auto"><div class="trackname"><strong>'+esc(x.title)+'</strong><small>'+esc([x.artist,x.year,x.country,x.format,x.tracks+' faixas'].filter(Boolean).join(' · '))+'</small><a href="https://musicbrainz.org/release/'+esc(x.id)+'" target="_blank" rel="noopener">Ver edição no MusicBrainz</a></div><button class="btn small" data-mb-choice="'+i+'">Importar</button></div>').join(''):'<p>Não encontrei uma edição segura. Consulte o catálogo e cole o MBID ou link da edição correta abaixo.</p>')+'<div class="field"><label for="mbId">Link ou MBID da edição</label><input id="mbId" placeholder="https://musicbrainz.org/release/…"></div><button id="mbDirect" class="btn">Consultar edição</button>';
-  box.onclick=async e=>{const b=e.target.closest('[data-mb-choice]');if(!b||busy)return;const s=items[Number(b.dataset.mbChoice)];await choose(a,s.id)};
+  box.innerHTML=(items.length?items.map((x,i)=>'<div class="track" style="grid-template-columns:minmax(0,1fr) auto"><div class="trackname"><strong>'+esc(x.title)+'</strong><small>'+esc([x.artist,x.year,x.country,x.format,x.tracks+' faixas'].filter(Boolean).join(' · '))+'</small><a href="'+esc(x.source==='itunes'?(x.url||'https://music.apple.com/br/album/'+x.id):'https://musicbrainz.org/release/'+x.id)+'" target="_blank" rel="noopener">Ver edição na fonte</a></div><button class="btn small" data-mb-choice="'+i+'">Importar</button></div>').join(''):'<p>Não encontrei uma edição segura. Consulte o catálogo e cole o MBID ou link da edição correta abaixo.</p>')+'<div class="field"><label for="mbId">Link ou MBID da edição</label><input id="mbId" placeholder="https://musicbrainz.org/release/…"></div><button id="mbDirect" class="btn">Consultar edição</button>';
+  box.onclick=async e=>{const b=e.target.closest('[data-mb-choice]');if(!b||busy)return;const s=items[Number(b.dataset.mbChoice)];await choose(a,s.id,s.source)};
   $('mbDirect').onclick=async()=>{const raw=$('mbId').value.trim(),id=raw.match(/^(?:https:\/\/musicbrainz\.org\/release\/)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i)?.[1];if(!id){m.textContent='Informe um link ou MBID válido de uma edição.';return}await choose(a,id)};
  }
- async function choose(a,id){
+ async function choose(a,id,source){
   if(busy)return;busy=true;const m=$('mbMsg');
-  try{m.textContent='Consultando edição…';const d=await request({action:'detail',id});
+  try{m.textContent='Consultando edição…';const d=await request({action:source==='itunes'?'itunes-detail':'detail',id});
    if(!confirm('Importar a edição '+d.title+' — '+d.artist+' ('+(d.year||'ano desconhecido')+', '+d.tracks.length+' faixas)?')){m.textContent='Importação cancelada.';return}
-   await apply(a,d,true);closeModal();render();toast('Edição importada do MusicBrainz.')
+   await apply(a,d,true);closeModal();render();toast('Edição importada do catálogo.')
   }catch(e){m.textContent=e.message}finally{busy=false}
  }
  async function find(a){
   if(busy||sp.isBusy())return;busy=true;stop=false;const m=$('mbMsg');
-  try{m.textContent='Buscando edições…';const r=await request({action:'search',title:a.title,artist:a.artist,year:a.release_year});showChoices(a,r)}catch(e){m.textContent=e.message}finally{busy=false}
+  try{m.textContent='Buscando edições…';let r;try{r=await provider('iTunes',()=>request({action:'itunes-search',title:a.title,artist:a.artist,year:a.release_year}))}catch{}if(r?.choices?.length){showChoices(a,r)}else{r=await provider('MusicBrainz',()=>request({action:'search',title:a.title,artist:a.artist,year:a.release_year}));showChoices(a,r)}}catch(e){m.textContent=e.message}finally{busy=false}
  }
  function logout(){stop=true}
  return {panel,isBusy:()=>busy,logout};
@@ -274,15 +290,17 @@ function spotifyId(url){let m=String(url||'').match(/open\.spotify\.com\/(?:intl
 function spotifyEmbed(url){let id=spotifyId(url);return id?'https://open.spotify.com/embed/album/'+id+'?utm_source=generator&theme=0':null}
 function listForAlbum(id){return albumLists.filter(x=>x.album_id===id).map(x=>lists.find(l=>l.id===x.list_id)).filter(Boolean)}
 function cover(a){return a.cover_url||''}
+function hasArt(a){return !!(a.cover_url||(a.itunes_cover_url&&a.itunes_url))}
+function appleArt(a){return a.itunes_cover_url&&a.itunes_url?'<div class="applepromo"><a data-itunes-link href="'+esc(a.itunes_url)+'" target="_blank" rel="noopener"><img class="cover" src="'+esc(a.itunes_cover_url)+'" alt="Capa de '+esc(a.title)+'" loading="lazy"></a><a data-itunes-link href="'+esc(a.itunes_url)+'" target="_blank" rel="noopener"><img class="itunesbadge" src="https://www.apple.com/ca/itunes/link/images/link-badge-itunes.png" alt="Get it on iTunes Store"></a></div>':''}
 function statusLabel(s){return s==='concluido'?'Concluído':s==='ouvindo'?'Ouvindo':'Quero ouvir'}
-function coverHTML(a){return cover(a)?'<img class="cover" src="'+esc(cover(a))+'" alt="Capa de '+esc(a.title)+'" loading="lazy">':'<div class="cover placeholder"><svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="15" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="20" r="5" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="20" r="1.5" fill="currentColor"/></svg></div>'}
+function coverHTML(a,allowApple=true){return cover(a)?'<img class="cover" src="'+esc(cover(a))+'" alt="Capa de '+esc(a.title)+'" loading="lazy">':(allowApple&&appleArt(a))||'<div class="cover placeholder"><svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="15" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="20" r="5" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="20" r="1.5" fill="currentColor"/></svg></div>'}
 function albumCard(a){let sc=albumScore(a),s=a.status;return '<article class="album" data-album="'+a.id+'">'+coverHTML(a)+'<div class="albuminfo"><div class="albumtitle" title="'+esc(a.title)+'">'+esc(a.title)+'</div><div class="artist">'+esc(a.artist)+(a.release_year?' · '+a.release_year:'')+'</div><div class="albummeta"><span class="rating">'+(sc===null?'—':fmt(sc))+'</span><span class="status '+(s==='concluido'?'done':s==='ouvindo'?'playing':'')+'">'+(isFuture(a)?'Aguardado':statusLabel(s))+'</span></div></div></article>'}
 function renderHome(){
 let completed=albums.filter(a=>a.status==='concluido').length,waiting=albums.filter(a=>a.status==='quero_ouvir'&&!isFuture(a)).length,allRated=albums.map(albumScore).filter(x=>x!==null),overall=allRated.length?allRated.reduce((a,b)=>a+b,0)/allRated.length:null;
 let next=albums.find(a=>a.status==='ouvindo')||albums.find(a=>a.status==='quero_ouvir'&&!isFuture(a));
 return '<section class="hero"><div class="hero-main"><div class="eyebrow">Sua biblioteca musical</div><h2>Uma boa música merece ser lembrada.</h2><p>Organize seus discos, descubra o próximo álbum e registre o que cada faixa despertou.</p><button class="btn primary" id="surpriseBtn">✦ Surpreenda-me</button> <button class="btn" id="mbCatalog">Completar acervo</button><svg class="hero-art" viewBox="0 0 180 180" fill="none"><circle cx="90" cy="90" r="78" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="52" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="25" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="6" fill="white"/></svg></div><div class="stats"><div class="stat"><strong>'+albums.length+'</strong><span>Álbuns no acervo</span></div><div class="stat"><strong>'+completed+'</strong><span>Ouvidos</span></div><div class="stat"><strong>'+waiting+'</strong><span>Na fila</span></div><div class="stat"><strong>'+(overall===null?'—':fmt(overall))+'</strong><span>Média dos discos</span></div></div></section>'+
 '<div class="sectionhead"><div><h2>Continue de onde parou</h2><p>Seu próximo capítulo musical.</p></div></div>'+
-(next?'<div class="detail"><div class="detailhero">'+(cover(next)?'<img src="'+esc(cover(next))+'" alt="">':'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(next.status==='ouvindo'?'Em andamento':'Na sua fila')+'</div><h2>'+esc(next.title)+'</h2><p>'+esc(next.artist)+'</p><div class="row"><button class="btn primary" id="continueBtn" data-id="'+next.id+'">'+(next.status==='ouvindo'?'Abrir avaliação':'Começar a ouvir')+'</button>'+(next.spotify_url?'<a class="btn ghost" href="'+esc(next.spotify_url)+'" target="_blank" rel="noopener">Abrir no Spotify ↗</a>':'')+'</div></div></div></div>':'<div class="empty"><strong>Seu acervo começa aqui.</strong>Cadastre um álbum para escolher sua próxima audição.</div>')+
+(next?'<div class="detail"><div class="detailhero">'+(cover(next)?'<img src="'+esc(cover(next))+'" alt="">':appleArt(next)||'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(next.status==='ouvindo'?'Em andamento':'Na sua fila')+'</div><h2>'+esc(next.title)+'</h2><p>'+esc(next.artist)+'</p><div class="row"><button class="btn primary" id="continueBtn" data-id="'+next.id+'">'+(next.status==='ouvindo'?'Abrir avaliação':'Começar a ouvir')+'</button>'+(next.spotify_url?'<a class="btn ghost" href="'+esc(next.spotify_url)+'" target="_blank" rel="noopener">Abrir no Spotify ↗</a>':'')+'</div></div></div></div>':'<div class="empty"><strong>Seu acervo começa aqui.</strong>Cadastre um álbum para escolher sua próxima audição.</div>')+
 '<div class="sectionhead"><div><h2>Adicionados recentemente</h2><p>Os últimos discos que entraram na coleção.</p></div><button class="btn small" id="addAlbumHome">+ Adicionar álbum</button></div>'+
 '<div class="albumgrid">'+(albums.length?albums.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,5).map(albumCard).join(''):'<div class="empty"><strong>Nenhum álbum cadastrado.</strong>Adicione um álbum ou cole um link do Spotify.</div>')+'</div>';
 }
@@ -298,7 +316,7 @@ let arr=albums.filter(a=>!activeList||albumLists.some(x=>x.album_id===a.id&&x.li
 if(byArtist){
  const grouped=new Map();for(const album of arr){if(!grouped.has(album.artist))grouped.set(album.artist,[]);grouped.get(album.artist).push(album)}
  if(!activeArtist){const groups=[...grouped].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR'));
- return html+'<div class="sectionhead"><div><h2>'+esc(current.name)+'</h2><p>'+groups.length+' artistas · '+arr.length+' álbuns</p></div></div><div class="artistgrid">'+groups.map(([name,items])=>'<button class="artistcard" data-artist="'+esc(name)+'"><div class="artistart">'+coverHTML(items.find(x=>x.cover_url)||items[0])+'</div><div><strong>'+esc(name)+'</strong><small>'+items.length+' álbuns · '+items.filter(x=>x.status==='concluido').length+' ouvidos</small></div><span>›</span></button>').join('')+'</div>'}
+ return html+'<div class="sectionhead"><div><h2>'+esc(current.name)+'</h2><p>'+groups.length+' artistas · '+arr.length+' álbuns</p></div></div><div class="artistgrid">'+groups.map(([name,items])=>'<button class="artistcard" data-artist="'+esc(name)+'"><div class="artistart">'+coverHTML(items.find(x=>x.cover_url)||items[0],false)+'</div><div><strong>'+esc(name)+'</strong><small>'+items.length+' álbuns · '+items.filter(x=>x.status==='concluido').length+' ouvidos</small></div><span>›</span></button>').join('')+'</div>'}
  arr=(grouped.get(activeArtist)||[]).slice().sort((a,b)=>(a.release_year||9999)-(b.release_year||9999)||a.title.localeCompare(b.title,'pt-BR'));
  html+='<div class="sectionhead"><div><button class="btn ghost small" id="backArtists">← Todos os artistas</button><h2 style="margin-top:10px">'+esc(activeArtist)+'</h2><p>'+arr.length+' álbuns · ordem cronológica</p></div></div>';
 }
@@ -313,7 +331,7 @@ return '<div class="sectionhead"><div><h2>Ranking dos álbuns</h2><p>Classifica�
 }
 function renderDetail(a){
 let ts=albumTracks(a.id),sc=albumScore(a),rated=ratedCount(a),embed=spotifyEmbed(a.spotify_url);
-return '<div class="sectionhead"><button class="btn ghost small" id="backAlbums">← Voltar</button><div class="toolbar"><button class="btn small" id="spAlbum">Vincular Spotify</button><button class="btn small" id="mbAlbum">MusicBrainz</button><button class="btn small" id="editAlbum">Editar</button><button class="btn small danger" id="deleteAlbum">Excluir</button></div></div><section class="detail"><div class="detailhero">'+(cover(a)?'<img src="'+esc(cover(a))+'" alt="Capa de '+esc(a.title)+'">':'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(isFuture(a)?'Aguardado':statusLabel(a.status))+'</div><h2>'+esc(a.title)+'</h2><p>'+esc(a.artist)+(a.release_year?' · '+a.release_year:'')+(a.genre?' · '+esc(a.genre):'')+'</p>'+(a.musicbrainz_release_id?'<p class="hint"><a href="https://musicbrainz.org/release/'+esc(a.musicbrainz_release_id)+'" target="_blank" rel="noopener">Edição cadastrada via MusicBrainz</a></p>':'')+'<div class="bigscore">'+(sc===null?'—':fmt(sc))+'<small style="font-size:12px;color:var(--muted)"> / 10</small></div><p>'+rated+' de '+ts.length+' faixas avaliadas</p><div class="row">'+(a.spotify_url?'<a class="btn primary" href="'+esc(a.spotify_url)+'" target="_blank" rel="noopener">'+sp.logo+'Ouvir no Spotify ↗</a>':isFuture(a)?'':'<a class="btn primary" href="'+esc(spotifySearch(a))+'" target="_blank" rel="noopener">Buscar no Spotify ↗</a>')+'<button class="btn small" id="toggleComplete">'+(a.status==='concluido'?'Marcar como ouvindo':'Marcar como concluído')+'</button></div></div></div><div class="sectionhead"><div><h2>Faixas</h2><p>Avalie de 0 a 10. A média considera somente as faixas avaliadas.</p></div><button class="btn small" id="addTracks">+ Adicionar faixas</button></div><div class="tracklist">'+(ts.length?ts.map((t,i)=>'<div class="track"><div class="tracknum">'+(t.position||i+1)+'</div><div class="trackname"><strong>'+esc(t.title)+'</strong><small>'+(t.notes?esc(t.notes):'Toque na nota para avaliar')+'</small></div><input aria-label="Nota de '+esc(t.title)+'" type="number" min="0" max="10" step="0.1" placeholder="—" value="'+(t.rating??'')+'" data-rating="'+t.id+'"><button class="note-btn '+(t.notes?'hasnote':'')+'" title="Anotação" data-tracknote="'+t.id+'">✎</button></div>').join(''):'<div class="empty"><strong>Sem faixas cadastradas.</strong>Adicione as músicas para começar a avaliar o álbum.</div>')+'</div><div class="sectionhead"><div><h2>Suas anotações</h2><p>O que você quer guardar sobre este disco?</p></div></div><div class="field"><textarea id="albumNotes" placeholder="Impressões gerais, melhores momentos, contexto...">'+esc(a.notes||'')+'</textarea></div><button class="btn primary" id="saveAlbumNotes">Salvar anotação</button><div class="sectionhead"><div><h2>Listas</h2><p>Organize este álbum em suas coleções.</p></div></div><div class="checks">'+lists.map(l=>'<label><input type="checkbox" data-albumlist="'+l.id+'" '+(listForAlbum(a.id).some(x=>x.id===l.id)?'checked':'')+'> '+esc(l.name)+'</label>').join('')+'</div></section>'+(embed?'<div class="sectionhead"><div><h2>Ouvir por aqui</h2><p>Player incorporado do Spotify.</p></div></div><div style="border-radius:15px;overflow:hidden"><iframe title="Spotify player" src="'+embed+'" width="100%" height="352" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe></div>':'');
+return '<div class="sectionhead"><button class="btn ghost small" id="backAlbums">← Voltar</button><div class="toolbar"><button class="btn small" id="spAlbum">Vincular Spotify</button><button class="btn small" id="mbAlbum">MusicBrainz</button><button class="btn small" id="editAlbum">Editar</button><button class="btn small danger" id="deleteAlbum">Excluir</button></div></div><section class="detail"><div class="detailhero">'+(cover(a)?'<img src="'+esc(cover(a))+'" alt="Capa de '+esc(a.title)+'">':appleArt(a)||'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(isFuture(a)?'Aguardado':statusLabel(a.status))+'</div><h2>'+esc(a.title)+'</h2><p>'+esc(a.artist)+(a.release_year?' · '+a.release_year:'')+(a.genre?' · '+esc(a.genre):'')+'</p>'+(a.musicbrainz_release_id?'<p class="hint"><a href="https://musicbrainz.org/release/'+esc(a.musicbrainz_release_id)+'" target="_blank" rel="noopener">Edição cadastrada via MusicBrainz</a></p>':a.itunes_url?'<p class="hint"><a href="'+esc(a.itunes_url)+'" target="_blank" rel="noopener">Edição cadastrada via iTunes</a></p>':'')+'<div class="bigscore">'+(sc===null?'—':fmt(sc))+'<small style="font-size:12px;color:var(--muted)"> / 10</small></div><p>'+rated+' de '+ts.length+' faixas avaliadas</p><div class="row">'+(a.spotify_url?'<a class="btn primary" href="'+esc(a.spotify_url)+'" target="_blank" rel="noopener">'+sp.logo+'Ouvir no Spotify ↗</a>':isFuture(a)?'':'<a class="btn primary" href="'+esc(spotifySearch(a))+'" target="_blank" rel="noopener">Buscar no Spotify ↗</a>')+'<button class="btn small" id="toggleComplete">'+(a.status==='concluido'?'Marcar como ouvindo':'Marcar como concluído')+'</button></div></div></div><div class="sectionhead"><div><h2>Faixas</h2><p>Avalie de 0 a 10. A média considera somente as faixas avaliadas.</p></div><button class="btn small" id="addTracks">+ Adicionar faixas</button></div><div class="tracklist">'+(ts.length?ts.map((t,i)=>'<div class="track"><div class="tracknum">'+(t.position||i+1)+'</div><div class="trackname"><strong>'+esc(t.title)+'</strong><small>'+(t.notes?esc(t.notes):'Toque na nota para avaliar')+'</small></div><input aria-label="Nota de '+esc(t.title)+'" type="number" min="0" max="10" step="0.1" placeholder="—" value="'+(t.rating??'')+'" data-rating="'+t.id+'"><button class="note-btn '+(t.notes?'hasnote':'')+'" title="Anotação" data-tracknote="'+t.id+'">✎</button></div>').join(''):'<div class="empty"><strong>Sem faixas cadastradas.</strong>Adicione as músicas para começar a avaliar o álbum.</div>')+'</div><div class="sectionhead"><div><h2>Suas anotações</h2><p>O que você quer guardar sobre este disco?</p></div></div><div class="field"><textarea id="albumNotes" placeholder="Impressões gerais, melhores momentos, contexto...">'+esc(a.notes||'')+'</textarea></div><button class="btn primary" id="saveAlbumNotes">Salvar anotação</button><div class="sectionhead"><div><h2>Listas</h2><p>Organize este álbum em suas coleções.</p></div></div><div class="checks">'+lists.map(l=>'<label><input type="checkbox" data-albumlist="'+l.id+'" '+(listForAlbum(a.id).some(x=>x.id===l.id)?'checked':'')+'> '+esc(l.name)+'</label>').join('')+'</div></section>'+(embed?'<div class="sectionhead"><div><h2>Ouvir por aqui</h2><p>Player incorporado do Spotify.</p></div></div><div style="border-radius:15px;overflow:hidden"><iframe title="Spotify player" src="'+embed+'" width="100%" height="352" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe></div>':'');
 }
 function render(){
 let m=$('main');
@@ -359,6 +377,7 @@ async function deleteAlbum(){let a=albums.find(x=>x.id===selectedAlbum);if(!conf
 function bind(){
 $('nav').onclick=e=>{let b=e.target.closest('[data-page]');if(!b)return;selectedAlbum=null;page=b.dataset.page;query='';activeList=null;activeArtist=null;render()};
 $('main').onclick=async e=>{
+if(e.target.closest('[data-itunes-link]'))return;
 let a=e.target.closest('[data-album]');if(a){openAlbum(a.dataset.album);return}
 let b=e.target.closest('[data-open]');if(b){openAlbum(b.dataset.open);return}
 if(e.target.closest('#addAlbum')||e.target.closest('#addAlbumHome')){showAlbumForm(null);return}
