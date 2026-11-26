@@ -154,7 +154,7 @@ function spotifyIntegration(){
 }
 const sp=spotifyIntegration();
 function musicbrainzIntegration(){
- let busy=false,stop=false,last=0;
+ let busy=false,stop=false,last=0;const matched=new Map();
  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  const need=a=>!isFuture(a)&&(!albumTracks(a.id).length||(!a.cover_url&&!a.musicbrainz_cover_checked));
  const queue=()=>albums.filter(a=>need(a)&&!a.musicbrainz_review);
@@ -162,13 +162,29 @@ function musicbrainzIntegration(){
  const ready=()=>albums.filter(a=>!isFuture(a)&&a.cover_url&&albumTracks(a.id).length).length;
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  async function request(body){
-  const wait=Math.max(0,1500-(Date.now()-last));if(wait)await sleep(wait);
-  if(stop||!user){const e=Error('Importação interrompida.');e.transient=true;throw e}
-  last=Date.now();
-  const {data,error}=await sb.functions.invoke('vitrola-catalog',{body});
-  if(error){const e=Error('Não foi possível consultar o catálogo agora. '+error.message);e.transient=true;throw e}
-  if(!data?.ok){const e=Error(data?.error||'Resposta inválida do catálogo.');e.transient=!!data?.transient;throw e}
-  return data.data;
+  const waits=[15000,45000];let lastError;
+  for(let attempt=0;attempt<=waits.length;attempt++){
+   const wait=Math.max(0,3500-(Date.now()-last));if(wait)await sleep(wait);
+   if(stop||!user){const e=Error('Importação interrompida.');e.transient=true;throw e}
+   last=Date.now();
+   try{
+    const {data,error}=await sb.functions.invoke('vitrola-catalog',{body});
+    if(error){const e=Error('Não foi possível consultar o catálogo agora. '+error.message);e.transient=true;throw e}
+    if(!data?.ok){const e=Error(data?.error||'Resposta inválida do catálogo.');e.transient=!!data?.transient;e.retryAfter=data?.retry_after;throw e}
+    return data.data;
+   }catch(e){
+    lastError=e;if(!e.transient||stop||!user||attempt===waits.length)throw e;
+    const pause=Math.max(waits[attempt],Number(e.retryAfter||0)*1000);
+    if(pause>120000){const x=Error(e.message+' — o serviço pediu uma pausa de '+Math.ceil(pause/60000)+' minutos. Retome mais tarde.');x.transient=true;throw x}
+    const m=$('mbMsg'),previous=m?.textContent||'';
+    for(let remaining=pause;remaining>0;remaining-=1000){
+     if(stop||!user){const x=Error('Importação interrompida.');x.transient=true;throw x}
+     if(m)m.textContent=previous+'\nCatálogo temporariamente indisponível. Nova tentativa em '+Math.ceil(remaining/1000)+' s ('+(attempt+1)+'/2).';
+     await sleep(Math.min(remaining,1000));
+    }
+    if(m)m.textContent=previous+'\nRetomando a consulta…';
+   }
+  }throw lastError;
  }
  function updateLocal(a){albums=albums.map(x=>x.id===a.id?a:x)}
  async function update(a,values){if(!user)throw Error('Sessão encerrada.');const r=await sb.from('discos_albums').update({...values,updated_at:new Date().toISOString()}).eq('id',a.id).eq('user_id',user.id).select().single();if(r.error)throw r.error;updateLocal(r.data);return r.data}
@@ -191,15 +207,15 @@ function musicbrainzIntegration(){
   await update(a,payload);
  }
  async function lookup(a){
-  if(a.musicbrainz_release_id)return request({action:'detail',id:a.musicbrainz_release_id});
+  if(a.musicbrainz_release_id||matched.has(a.id))return request({action:'detail',id:a.musicbrainz_release_id||matched.get(a.id)});
   const r=await request({action:'search',title:a.title,artist:a.artist,year:a.release_year});
   if(!r.match)return {review:r.reason||'Sem edição segura.'};
-  return request({action:'detail',id:r.match.id});
+  matched.set(a.id,r.match.id);return request({action:'detail',id:r.match.id});
  }
  function statusLine(){return ready()+' álbuns com capa e faixas · '+queue().length+' na fila · '+reviewed().length+' para revisão'}
  function panel(target=null){
   if(busy||sp.isBusy()){toast('Aguarde a importação atual.');return}stop=false;
-  modal('<h2>Catálogo musical</h2><p>MusicBrainz + Cover Art Archive · não utiliza a cota do Spotify.</p><p class="hint">'+esc(statusLine())+'</p><div id="mbMsg" class="hint" style="margin:14px 0;white-space:pre-wrap" role="status"></div><div class="row">'+(target?'<button id="mbFind" class="btn primary">Buscar edição de '+esc(target.title)+'</button>':'<button id="mbSync" class="btn primary">Completar álbuns pendentes</button><button id="mbReview" class="btn ghost">Revisar pendências</button>')+'<button id="mbStop" class="btn" hidden>Parar</button></div><div id="mbResults"></div><div class="modalactions"><button id="mbBack" class="btn ghost">Voltar</button></div>');
+  modal('<h2>Catálogo musical</h2><p>MusicBrainz + Cover Art Archive · não utiliza a cota do Spotify.</p><p class="hint" id="mbStatus">'+esc(statusLine())+'</p><div id="mbMsg" class="hint" style="margin:14px 0;white-space:pre-wrap" role="status"></div><div class="row">'+(target?'<button id="mbFind" class="btn primary">Buscar edição de '+esc(target.title)+'</button>':'<button id="mbSync" class="btn primary">Completar álbuns pendentes</button><button id="mbReview" class="btn ghost">Revisar pendências</button>')+'<button id="mbStop" class="btn" hidden>Parar</button></div><div id="mbResults"></div><div class="modalactions"><button id="mbBack" class="btn ghost">Voltar</button></div>');
   $('mbBack').onclick=()=>{if(busy){stop=true;return}closeModal()};$('mbStop').onclick=()=>{stop=true;$('mbMsg').textContent+=' — interrompendo…'};
   if(target)$('mbFind').onclick=()=>find(target);else{$('mbSync').onclick=()=>sync();$('mbReview').onclick=()=>showReview()}
  }
@@ -209,10 +225,11 @@ function musicbrainzIntegration(){
   try{for(const a of q){if(stop||!user)break;i++;m.textContent='Álbum '+i+'/'+q.length+' · '+a.artist+' — '+a.title+'\nImportados: '+done+' · Revisão: '+review;
     try{const d=await lookup(a);if(d.review){await update(a,{musicbrainz_review:d.review});review++;continue}await apply(a,d);done++}
     catch(e){if(stop||e.transient||!user)throw e;await update(a,{musicbrainz_review:e.message||'Erro de importação'});review++}
+    if($('mbStatus'))$('mbStatus').textContent=statusLine();await sleep(2000);
    }
    m.textContent=(stop?'Interrompido. ':'Importação finalizada. ')+'Importados: '+done+' · Revisão: '+review+'. '+statusLine();
-  }catch(e){m.textContent=e.message+' Importados nesta sessão: '+done+'. O progresso foi salvo.'}
-  finally{busy=false;if($('mbSync'))$('mbSync').disabled=false;if($('mbStop'))$('mbStop').hidden=true;if(user)render()}
+  }catch(e){m.textContent=(stop?'Importação interrompida.':e.transient?'O catálogo continua indisponível após as tentativas. '+e.message:'Erro: '+e.message)+' Importados nesta sessão: '+done+'. O progresso foi salvo. Retome pelo mesmo botão.'}
+  finally{busy=false;if($('mbStatus'))$('mbStatus').textContent=statusLine();if($('mbSync'))$('mbSync').disabled=false;if($('mbStop'))$('mbStop').hidden=true;if(user)render()}
  }
  function showReview(){
   if(busy)return;
