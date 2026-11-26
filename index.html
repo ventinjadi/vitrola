@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f8f3e7">
 <meta name="color-scheme" content="light">
-<link rel="icon" type="image/svg+xml" href="./icon.svg?v=2">
+<link rel="icon" type="image/svg+xml" href="./icon.svg?v=3">
 <meta name="description" content="Seu catálogo, diário de audição e coleção musical.">
 <link rel="manifest" href="./manifest.webmanifest">
 <title>Vitrola — sua biblioteca musical</title>
@@ -38,7 +38,7 @@ html{color-scheme:light}
 body{background:var(--bg)}
 a{color:#77516c}
 .mark{background:var(--icon-bg);box-shadow:none;color:var(--rose-ink);flex-shrink:0}
-.mark svg{width:38px;height:38px}
+.mark svg{width:41px;height:41px}
 .nav{padding:5px;border-radius:17px}
 .nav button{color:#eae4da}
 .nav button.active{background:var(--rose);color:var(--charcoal)}
@@ -67,13 +67,13 @@ a{color:#77516c}
 .status{border-radius:99px}
 .track input{color:var(--accent-ink)}
 .toast{background:var(--charcoal);color:#fffaf1}
-@media(max-width:680px){.stats .stat{min-height:80px}.mark svg{width:33px;height:33px}}
+@media(max-width:680px){.stats .stat{min-height:80px}.mark svg{width:36px;height:36px}}
 </style>
 </head>
 <body>
 <div id="authView" class="auth">
   <form id="loginForm" class="authbox">
-    <div class="authbrand"><div class="mark"><svg viewBox="0 0 512 512" fill="none" aria-hidden="true"><circle cx="236" cy="264" r="143" fill="#bb87a3"/><circle cx="236" cy="264" r="111" stroke="#e7ebe1" stroke-width="10" opacity=".9"/><circle cx="236" cy="264" r="73" stroke="#e7ebe1" stroke-width="9" opacity=".9"/><circle cx="236" cy="264" r="38" fill="#f3d8a0"/><circle cx="236" cy="264" r="11" fill="#82556c"/><path d="M389 149v109l-65 69" stroke="#7899ab" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="389" cy="149" r="21" fill="#7899ab"/><path d="m324 327-18 19" stroke="#7899ab" stroke-width="33" stroke-linecap="round"/></svg></div><div><h1>Vitrola</h1><p>SUA BIBLIOTECA MUSICAL</p></div></div>
+    <div class="authbrand"><div class="mark"><svg viewBox="0 0 512 512" fill="none" aria-hidden="true"><g transform="translate(256 256) scale(1.22) translate(-251 -264)"><circle cx="236" cy="264" r="143" fill="#bb87a3"/><circle cx="236" cy="264" r="111" stroke="#e7ebe1" stroke-width="10" opacity=".9"/><circle cx="236" cy="264" r="73" stroke="#e7ebe1" stroke-width="9" opacity=".9"/><circle cx="236" cy="264" r="38" fill="#f3d8a0"/><circle cx="236" cy="264" r="11" fill="#82556c"/><path d="M389 149v109l-65 69" stroke="#7899ab" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="389" cy="149" r="21" fill="#7899ab"/><path d="m324 327-18 19" stroke="#7899ab" stroke-width="33" stroke-linecap="round"/></g></svg></div><div><h1>Vitrola</h1><p>SUA BIBLIOTECA MUSICAL</p></div></div>
     <h2>Entre no seu acervo</h2><p>Use a mesma conta do Cultivo e do Maré para manter tudo sincronizado.</p>
     <div class="field"><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required></div>
     <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="current-password" required></div>
@@ -84,7 +84,7 @@ a{color:#77516c}
 </div>
 <div id="appView" class="shell" hidden>
 <header class="top">
-  <div class="brand"><div class="mark"><svg viewBox="0 0 512 512" fill="none" aria-hidden="true"><circle cx="236" cy="264" r="143" fill="#bb87a3"/><circle cx="236" cy="264" r="111" stroke="#e7ebe1" stroke-width="10" opacity=".9"/><circle cx="236" cy="264" r="73" stroke="#e7ebe1" stroke-width="9" opacity=".9"/><circle cx="236" cy="264" r="38" fill="#f3d8a0"/><circle cx="236" cy="264" r="11" fill="#82556c"/><path d="M389 149v109l-65 69" stroke="#7899ab" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="389" cy="149" r="21" fill="#7899ab"/><path d="m324 327-18 19" stroke="#7899ab" stroke-width="33" stroke-linecap="round"/></svg></div><div><h1>Vitrola</h1><small>ouvir · sentir · lembrar</small></div></div>
+  <div class="brand"><div class="mark"><svg viewBox="0 0 512 512" fill="none" aria-hidden="true"><g transform="translate(256 256) scale(1.22) translate(-251 -264)"><circle cx="236" cy="264" r="143" fill="#bb87a3"/><circle cx="236" cy="264" r="111" stroke="#e7ebe1" stroke-width="10" opacity=".9"/><circle cx="236" cy="264" r="73" stroke="#e7ebe1" stroke-width="9" opacity=".9"/><circle cx="236" cy="264" r="38" fill="#f3d8a0"/><circle cx="236" cy="264" r="11" fill="#82556c"/><path d="M389 149v109l-65 69" stroke="#7899ab" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="389" cy="149" r="21" fill="#7899ab"/><path d="m324 327-18 19" stroke="#7899ab" stroke-width="33" stroke-linecap="round"/></g></svg></div><div><h1>Vitrola</h1><small>ouvir · sentir · lembrar</small></div></div>
   <div class="topright"><span id="userEmail" class="userpill"></span><button id="spStatus" class="btn ghost small">Conectar Spotify</button><button id="logoutBtn" class="btn ghost small">Sair</button></div>
 </header>
 <nav class="nav" id="nav">
