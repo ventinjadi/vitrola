@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#a3ded4"/><rect x="76" y="116" width="360" height="280" rx="42" fill="#12323a"/><circle cx="236" cy="254" r="116" fill="none" stroke="#a3ded4" stroke-width="17"/><circle cx="236" cy="254" r="70" fill="none" stroke="#a3ded4" stroke-width="12"/><circle cx="236" cy="254" r="15" fill="#a3ded4"/><path d="M350 155v105l-64 62M350 155l36 10" stroke="#a3ded4" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><path d="M116 352h66" stroke="#a3ded4" stroke-width="17" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vitrola — disco de vinil e braço da agulha">
+<rect width="512" height="512" fill="#e7ebe1"/>
+<circle cx="236" cy="264" r="143" fill="#bb87a3"/>
+<circle cx="236" cy="264" r="111" fill="none" stroke="#e7ebe1" stroke-width="10" opacity=".9"/>
+<circle cx="236" cy="264" r="73" fill="none" stroke="#e7ebe1" stroke-width="9" opacity=".9"/>
+<circle cx="236" cy="264" r="38" fill="#f3d8a0"/>
+<circle cx="236" cy="264" r="11" fill="#82556c"/>
+<path d="M389 149v109l-65 69" fill="none" stroke="#7899ab" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="389" cy="149" r="21" fill="#7899ab"/>
+<path d="m324 327-18 19" fill="none" stroke="#7899ab" stroke-width="33" stroke-linecap="round"/>
+</svg>
