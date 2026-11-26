@@ -68,6 +68,18 @@ a{color:#77516c}
 .track input{color:var(--accent-ink)}
 .toast{background:var(--charcoal);color:#fffaf1}
 @media(max-width:680px){.stats .stat{min-height:80px}.mark svg{width:36px;height:36px}}
+
+/* Navigation stays inside the bar: all five tabs visible on phones. */
+.nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));overflow:visible;gap:6px}
+.nav button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:normal;text-align:center;line-height:1.25;min-height:44px}
+.nav button:focus-visible{outline-offset:-2px}
+@media(max-width:680px){
+  .nav{gap:3px;padding:4px;border-radius:15px}
+  .nav button{padding:8px 2px;font-size:11px;line-height:1.2;min-height:46px;border-radius:10px}
+}
+@media(max-width:340px){
+  .nav button{font-size:10px;padding-inline:1px}
+}
 </style>
 </head>
 <body>
