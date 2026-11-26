@@ -1,22 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vitrola — aparelho de toca-discos visto de frente e ligeiramente de cima, com tampa aberta">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vitrola — gramofone antigo com corneta aberta">
 <rect width="512" height="512" fill="#e7ebe1"/>
 <g stroke-linejoin="round" stroke-linecap="round">
-<path d="M104 231L116 116Q119 97 139 97H349Q369 97 375 116L410 231Z" fill="#7899ab"/>
-<path d="M134 209L144 129H347L371 209Z" fill="#e7ebe1" opacity=".78"/>
-<path d="M104 231H410" stroke="#82556c" stroke-width="13"/>
-<path d="M82 263L110 226H403L430 263V282H82Z" fill="#d8b0c6"/>
-<ellipse cx="235" cy="247" rx="112" ry="25" fill="#82556c"/>
-<ellipse cx="235" cy="244" rx="87" ry="16" fill="none" stroke="#bb87a3" stroke-width="5"/>
-<ellipse cx="235" cy="244" rx="30" ry="9" fill="#f3d8a0"/>
-<ellipse cx="235" cy="244" rx="6" ry="3" fill="#82556c"/>
-<circle cx="367" cy="234" r="12" fill="#7899ab"/>
-<path d="M367 234L354 251L308 259" fill="none" stroke="#7899ab" stroke-width="12"/>
-<path d="M308 259L294 261" stroke="#7899ab" stroke-width="16"/>
-<rect x="74" y="266" width="364" height="111" rx="24" fill="#bb87a3"/>
-<path d="M95 280H417" stroke="#e7ebe1" stroke-width="6" opacity=".65"/>
-<g stroke="#82556c" stroke-width="8" opacity=".85"><path d="M117 310H206M117 326H206M117 342H206"/></g>
-<circle cx="376" cy="323" r="22" fill="#f3d8a0"/>
-<path d="M376 323V311" stroke="#82556c" stroke-width="5"/>
-<path d="M115 377V394M397 377V394" stroke="#82556c" stroke-width="18"/>
+<path d="M124 338V278C124 241 151 225 183 201C241 157 278 115 301 63L385 265C304 233 232 222 181 248C150 264 145 281 145 303V338Z" fill="#bb87a3"/>
+<path d="M135 287C142 248 179 221 225 193C264 169 290 138 313 96L346 200C282 202 220 213 177 245C151 264 140 284 135 309Z" fill="#f3d8a0"/>
+<path d="M302 63C324 44 342 60 353 76C366 94 390 85 405 103C421 120 415 140 431 155C450 173 452 195 443 213C435 230 447 247 438 270C429 295 409 302 390 286C343 250 301 174 291 108C288 89 290 73 302 63Z" fill="#f3d8a0" stroke="#e7bda5" stroke-width="9"/>
+<path d="M307 73C299 116 332 222 393 281M328 85L338 169L397 108M342 187L437 175M366 235L437 252" fill="none" stroke="#d5a17f" stroke-width="7" opacity=".9"/>
+<path d="M115 290H153" stroke="#f3d8a0" stroke-width="10"/>
+<path d="M132 332L180 308L180 340" stroke="#7899ab" stroke-width="15" fill="none"/>
+<circle cx="132" cy="332" r="12" fill="#7899ab"/>
+<circle cx="180" cy="308" r="13" fill="#7899ab"/>
+<path d="M89 346L110 328H362L389 346V363H89Z" fill="#d8b0c6"/>
+<path d="M151 333C151 319 190 309 239 309C289 309 329 319 329 333V345C329 359 289 369 239 369C190 369 151 359 151 345Z" fill="#82556c"/>
+<ellipse cx="239" cy="332" rx="89" ry="22" fill="#9b6c86"/>
+<ellipse cx="239" cy="332" rx="24" ry="7" fill="#f3d8a0"/>
+<ellipse cx="239" cy="332" rx="6" ry="2.5" fill="#82556c"/>
+<path d="M180 316V335" stroke="#7899ab" stroke-width="12"/>
+<rect x="92" y="359" width="294" height="70" rx="13" fill="#bb87a3"/>
+<rect x="109" y="371" width="260" height="44" rx="9" fill="#a87591"/>
+<rect x="203" y="381" width="72" height="24" rx="8" fill="#f3d8a0"/>
+<circle cx="239" cy="393" r="6" fill="#82556c"/>
+<rect x="78" y="422" width="322" height="20" rx="9" fill="#d8b0c6"/>
+<path d="M111 442V451M367 442V451" stroke="#82556c" stroke-width="15"/>
 </g>
 </svg>
