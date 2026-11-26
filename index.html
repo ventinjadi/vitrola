@@ -117,13 +117,13 @@ function spotifyIntegration(){
  }
  async function search(q,pages=1){const out=new Map();for(let i=0;i<pages;i++){const j=await api('search?'+new URLSearchParams({q,type:'album',market:'BR',limit:'10',offset:String(i*10)}));const p=j.albums;for(const s of p?.items||[])if(s?.id)out.set(s.id,s);if(!p?.next||!p.items?.length)break}return [...out.values()]}
  async function fetchTracks(id){let out=[],offset=0;while(true){let j=await api('albums/'+id+'/tracks?market=BR&limit=50&offset='+offset);out.push(...(j.items||[]));if(!j.next||!j.items?.length)return out;offset+=j.items.length}}
- async function persist(a,s){if(!/^[A-Za-z0-9]{22}$/.test(s.id))throw Error('ID de álbum inválido.');const old=albumTracks(a.id),link='https://open.spotify.com/album/'+s.id;if(a.release_year&&Number(s.release_date?.slice(0,4))!==Number(a.release_year)&&!confirm('A edição escolhida é de '+(s.release_date?.slice(0,4)||'ano desconhecido')+', mas seu registro é de '+a.release_year+'. Deseja vincular esta edição mesmo assim?'))throw Error('Vínculo cancelado. Selecione a edição correta.');if(old.length&&spotifyId(a.spotify_url)!==s.id)throw Error('Este álbum já possui faixas. Para preservar avaliações, não será trocada a edição automaticamente.');
+ async function persist(a,s){if(!/^[A-Za-z0-9]{22}$/.test(s.id))throw Error('ID de álbum inválido.');const old=albumTracks(a.id),link='https://open.spotify.com/album/'+s.id;if(a.release_year&&Number(s.release_date?.slice(0,4))!==Number(a.release_year)&&!confirm('A edição escolhida é de '+(s.release_date?.slice(0,4)||'ano desconhecido')+', mas seu registro é de '+a.release_year+'. Deseja vincular esta edição mesmo assim?'))throw Error('Vínculo cancelado. Selecione a edição correta.');if(old.length&&spotifyId(a.spotify_url)!==s.id){const remote=await fetchTracks(s.id);if(remote.length!==old.length||!remote.every((t,i)=>norm(t.name)===norm(old[i].title)))throw Error('A edição do Spotify tem faixas diferentes. As avaliações e faixas existentes foram preservadas.');}
  const r=await sb.from('discos_albums').update({spotify_url:link,cover_url:s.images?.[0]?.url||a.cover_url||null,updated_at:new Date().toISOString()}).eq('id',a.id).eq('user_id',user.id).select().single();if(r.error)throw r.error;albums=albums.map(x=>x.id===a.id?r.data:x);
  const ts=old.length?[]:await fetchTracks(s.id);if(!old.length&&!ts.length)throw Error('A API não retornou faixas para esta edição. Confira a disponibilidade na sua conta.');
  if(ts.length){const ins=await sb.from('discos_tracks').insert(ts.map((t,i)=>({user_id:user.id,album_id:a.id,title:t.name,position:i+1,spotify_url:t.external_urls?.spotify||'https://open.spotify.com/track/'+t.id}))).select();if(ins.error)throw ins.error;tracks.push(...(ins.data||[]));}clearReview(a.id);return a.id}
  async function add(s){let a=albums.find(x=>spotifyId(x.spotify_url)===s.id||norm(x.title)===norm(s.name)&&norm(x.artist)===norm(s.artists.map(p=>p.name).join(', '))&&Number(x.release_year)===Number(s.release_date?.slice(0,4)));if(!a){const r=await sb.from('discos_albums').insert({user_id:user.id,title:s.name,artist:s.artists.map(p=>p.name).join(', '),release_year:Number(s.release_date?.slice(0,4))||null,spotify_url:'https://open.spotify.com/album/'+s.id,status:'quero_ouvir'}).select().single();if(r.error)throw r.error;a=r.data;albums.unshift(a);const l=lists.find(x=>x.slug==='quero-ouvir');if(l){const lr=await sb.from('discos_album_lists').insert({user_id:user.id,album_id:a.id,list_id:l.id}).select();if(lr.error)throw lr.error;albumLists.push(...(lr.data||[]))}}return persist(a,s)}
  function status(){if($('spStatus'))$('spStatus').textContent=get()?'Spotify conectado':'Conectar Spotify'}
- function panel(target=null){if(busy){toast('Sincronização em andamento.');return}const connected=!!get();stop=false;
+ function panel(target=null){if(busy||mb.isBusy()){toast('Sincronização em andamento.');return}const connected=!!get();stop=false;
  modal('<h2>'+logo+'Spotify</h2><p>Importe capas, links e faixas do catálogo sem alterar suas listas ou notas.</p><div id="spMessage" class="hint" style="margin:14px 0;white-space:pre-wrap" role="status"></div>'+(!connected?'<p>Autorize a Vitrola na página oficial do Spotify. Você não precisa inserir sua senha aqui.</p><button class="btn primary" id="spConnect">Conectar Spotify</button>':'<div class="row"><button class="btn primary" id="spSync">Sincronizar próximo lote ('+queueReady().length+' na fila)</button><button class="btn" id="spStop" hidden>Parar</button><button class="btn ghost" id="spReview">Ver revisão ('+(pending().length-queueReady().length)+')</button><button class="btn ghost" id="spDisconnect">Desconectar</button></div><div class="field" style="margin-top:16px"><label for="spQuery">'+(target?'Vincular edição correta de '+esc(target.title):'Pesquisar novo álbum')+'</label><input id="spQuery" value="'+esc(target?target.artist+' '+target.title:'')+'" placeholder="Artista, álbum ou link do Spotify"></div><button class="btn" id="spSearch">Buscar no Spotify</button><div id="spResults"></div>')+'<div class="modalactions"><button class="btn ghost" id="spClose">Fechar</button></div>');
  $('spClose').onclick=()=>{if(busy){stop=true;return}closeModal()};if(!connected){$('spConnect').onclick=()=>connect().catch(e=>$('spMessage').textContent=e.message);return}
  $('spDisconnect').onclick=()=>{if(busy){stop=true;return}sessionStorage.removeItem(key()+'token');status();panel()};$('spStop').onclick=()=>{stop=true};$('spSync').onclick=()=>sync();$('spReview').onclick=()=>showReview();$('spSearch').onclick=()=>searchUi(target);const block=blocked();if(block)$('spMessage').textContent=blockMessage(block);$('spQuery').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchUi(target)}}}
@@ -150,9 +150,101 @@ function spotifyIntegration(){
   finally{busy=false;if($('spSync')){$('spSync').disabled=false;$('spSync').textContent='Sincronizar próximo lote ('+queueReady().length+' na fila)';$('spStop').hidden=true;$('spReview').textContent='Ver revisão ('+(pending().length-queueReady().length)+')'}if(user)render()}
  }
  function logout(){stop=true;if(user)sessionStorage.removeItem(key()+'token')}
- return {panel,callback,status,logout,logo};
+ return {panel,callback,status,logout,logo,isBusy:()=>busy};
 }
 const sp=spotifyIntegration();
+function musicbrainzIntegration(){
+ let busy=false,stop=false,last=0;
+ const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ const need=a=>!isFuture(a)&&(!albumTracks(a.id).length||(!a.cover_url&&!a.musicbrainz_cover_checked));
+ const queue=()=>albums.filter(a=>need(a)&&!a.musicbrainz_review);
+ const reviewed=()=>albums.filter(a=>!isFuture(a)&&(a.musicbrainz_review||(!a.cover_url&&a.musicbrainz_cover_checked)));
+ const ready=()=>albums.filter(a=>!isFuture(a)&&a.cover_url&&albumTracks(a.id).length).length;
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ async function request(body){
+  const wait=Math.max(0,1500-(Date.now()-last));if(wait)await sleep(wait);
+  if(stop||!user){const e=Error('Importação interrompida.');e.transient=true;throw e}
+  last=Date.now();
+  const {data,error}=await sb.functions.invoke('vitrola-catalog',{body});
+  if(error){const e=Error('Não foi possível consultar o catálogo agora. '+error.message);e.transient=true;throw e}
+  if(!data?.ok){const e=Error(data?.error||'Resposta inválida do catálogo.');e.transient=!!data?.transient;throw e}
+  return data.data;
+ }
+ function updateLocal(a){albums=albums.map(x=>x.id===a.id?a:x)}
+ async function update(a,values){if(!user)throw Error('Sessão encerrada.');const r=await sb.from('discos_albums').update({...values,updated_at:new Date().toISOString()}).eq('id',a.id).eq('user_id',user.id).select().single();if(r.error)throw r.error;updateLocal(r.data);return r.data}
+ function sameTracks(old,rows){return old.length===rows.length&&old.every((t,i)=>norm(t.title)===norm(rows[i].title))}
+ async function apply(a,d,manual=false){
+  const old=albumTracks(a.id);
+  if(!d.tracks?.length)throw Error('A edição não tem faixas disponíveis.');
+  if(old.length&&!sameTracks(old,d.tracks))throw Error('A edição possui uma lista de faixas diferente da já cadastrada. As avaliações foram preservadas.');
+  const year=d.group_year||d.year;
+  if(a.release_year&&year&&Number(a.release_year)!==Number(year)&&!manual)throw Error('Ano divergente; escolha a edição manualmente.');
+  let payload={musicbrainz_release_id:d.id,musicbrainz_group_id:d.group_id||null,musicbrainz_cover_checked:!!d.cover_checked,musicbrainz_review:null};
+  if(!a.release_year&&year)payload.release_year=year;
+  if(!a.cover_url&&d.cover_url)payload.cover_url=d.cover_url;
+  if(!a.spotify_url&&d.spotify_url)payload.spotify_url=d.spotify_url;
+  if(!old.length){
+   const rows=d.tracks.map((t,i)=>({user_id:user.id,album_id:a.id,title:t.title,position:i+1}));
+   const r=await sb.from('discos_tracks').insert(rows).select();if(r.error)throw r.error;tracks.push(...(r.data||[]));
+  }
+  if(!d.cover_url&&!a.cover_url&&!d.cover_checked)payload.musicbrainz_review='Não foi possível verificar a capa. Tente revisar mais tarde.';
+  await update(a,payload);
+ }
+ async function lookup(a){
+  if(a.musicbrainz_release_id)return request({action:'detail',id:a.musicbrainz_release_id});
+  const r=await request({action:'search',title:a.title,artist:a.artist,year:a.release_year});
+  if(!r.match)return {review:r.reason||'Sem edição segura.'};
+  return request({action:'detail',id:r.match.id});
+ }
+ function statusLine(){return ready()+' álbuns com capa e faixas · '+queue().length+' na fila · '+reviewed().length+' para revisão'}
+ function panel(target=null){
+  if(busy||sp.isBusy()){toast('Aguarde a importação atual.');return}stop=false;
+  modal('<h2>Catálogo musical</h2><p>MusicBrainz + Cover Art Archive · não utiliza a cota do Spotify.</p><p class="hint">'+esc(statusLine())+'</p><div id="mbMsg" class="hint" style="margin:14px 0;white-space:pre-wrap" role="status"></div><div class="row">'+(target?'<button id="mbFind" class="btn primary">Buscar edição de '+esc(target.title)+'</button>':'<button id="mbSync" class="btn primary">Completar álbuns pendentes</button><button id="mbReview" class="btn ghost">Revisar pendências</button>')+'<button id="mbStop" class="btn" hidden>Parar</button></div><div id="mbResults"></div><div class="modalactions"><button id="mbBack" class="btn ghost">Voltar</button></div>');
+  $('mbBack').onclick=()=>{if(busy){stop=true;return}closeModal()};$('mbStop').onclick=()=>{stop=true;$('mbMsg').textContent+=' — interrompendo…'};
+  if(target)$('mbFind').onclick=()=>find(target);else{$('mbSync').onclick=()=>sync();$('mbReview').onclick=()=>showReview()}
+ }
+ async function sync(){
+  if(busy||sp.isBusy())return;busy=true;stop=false;const q=queue().slice(),m=$('mbMsg');let done=0,review=0,i=0;
+  $('mbSync').disabled=true;$('mbStop').hidden=false;
+  try{for(const a of q){if(stop||!user)break;i++;m.textContent='Álbum '+i+'/'+q.length+' · '+a.artist+' — '+a.title+'\nImportados: '+done+' · Revisão: '+review;
+    try{const d=await lookup(a);if(d.review){await update(a,{musicbrainz_review:d.review});review++;continue}await apply(a,d);done++}
+    catch(e){if(stop||e.transient||!user)throw e;await update(a,{musicbrainz_review:e.message||'Erro de importação'});review++}
+   }
+   m.textContent=(stop?'Interrompido. ':'Importação finalizada. ')+'Importados: '+done+' · Revisão: '+review+'. '+statusLine();
+  }catch(e){m.textContent=e.message+' Importados nesta sessão: '+done+'. O progresso foi salvo.'}
+  finally{busy=false;if($('mbSync'))$('mbSync').disabled=false;if($('mbStop'))$('mbStop').hidden=true;if(user)render()}
+ }
+ function showReview(){
+  if(busy)return;
+  const q=reviewed();
+  $('mbResults').innerHTML=q.length?q.map(a=>'<div class="track" style="grid-template-columns:minmax(0,1fr) auto"><div class="trackname"><strong>'+esc(a.artist+' · '+a.title)+'</strong><small>'+esc(a.musicbrainz_review||'Capa indisponível no Cover Art Archive')+'</small></div><button class="btn small" data-mb-review="'+a.id+'">Revisar</button></div>').join(''):'<p>Nenhum álbum em revisão.</p>';
+  $('mbResults').onclick=e=>{let b=e.target.closest('[data-mb-review]');if(!b)return;const a=albums.find(a=>a.id===b.dataset.mbReview);if(a){selectedAlbum=a.id;render();panel(a)}};
+ }
+ function showChoices(a,r){
+  const m=$('mbMsg'),box=$('mbResults');
+  m.textContent=r.reason||'Confira a edição antes de importar.';
+  if(r.groups?.length){box.innerHTML=r.groups.map(g=>'<div class="track" style="grid-template-columns:minmax(0,1fr) auto"><div class="trackname"><strong>'+esc(g.title)+'</strong><small>'+esc(g.artist)+' · '+esc(g.year||'')+'</small></div><button class="btn small" data-mb-group="'+g.id+'">Ver edições</button></div>').join('');
+   box.onclick=async e=>{const b=e.target.closest('[data-mb-group]');if(!b||busy)return;busy=true;try{const result=await request({action:'group',id:b.dataset.mbGroup,title:a.title,artist:a.artist,year:a.release_year});showChoices(a,result)}catch(e){m.textContent=e.message}finally{busy=false}};return}
+  const items=r.choices||[];
+  box.innerHTML=(items.length?items.map((x,i)=>'<div class="track" style="grid-template-columns:minmax(0,1fr) auto"><div class="trackname"><strong>'+esc(x.title)+'</strong><small>'+esc([x.artist,x.year,x.country,x.format,x.tracks+' faixas'].filter(Boolean).join(' · '))+'</small><a href="https://musicbrainz.org/release/'+esc(x.id)+'" target="_blank" rel="noopener">Ver edição no MusicBrainz</a></div><button class="btn small" data-mb-choice="'+i+'">Importar</button></div>').join(''):'<p>Não encontrei uma edição segura. Consulte o catálogo e cole o MBID ou link da edição correta abaixo.</p>')+'<div class="field"><label for="mbId">Link ou MBID da edição</label><input id="mbId" placeholder="https://musicbrainz.org/release/…"></div><button id="mbDirect" class="btn">Consultar edição</button>';
+  box.onclick=async e=>{const b=e.target.closest('[data-mb-choice]');if(!b||busy)return;const s=items[Number(b.dataset.mbChoice)];await choose(a,s.id)};
+  $('mbDirect').onclick=async()=>{const raw=$('mbId').value.trim(),id=raw.match(/^(?:https:\/\/musicbrainz\.org\/release\/)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i)?.[1];if(!id){m.textContent='Informe um link ou MBID válido de uma edição.';return}await choose(a,id)};
+ }
+ async function choose(a,id){
+  if(busy)return;busy=true;const m=$('mbMsg');
+  try{m.textContent='Consultando edição…';const d=await request({action:'detail',id});
+   if(!confirm('Importar a edição '+d.title+' — '+d.artist+' ('+(d.year||'ano desconhecido')+', '+d.tracks.length+' faixas)?')){m.textContent='Importação cancelada.';return}
+   await apply(a,d,true);closeModal();render();toast('Edição importada do MusicBrainz.')
+  }catch(e){m.textContent=e.message}finally{busy=false}
+ }
+ async function find(a){
+  if(busy||sp.isBusy())return;busy=true;stop=false;const m=$('mbMsg');
+  try{m.textContent='Buscando edições…';const r=await request({action:'search',title:a.title,artist:a.artist,year:a.release_year});showChoices(a,r)}catch(e){m.textContent=e.message}finally{busy=false}
+ }
+ function logout(){stop=true}
+ return {panel,isBusy:()=>busy,logout};
+}
+const mb=musicbrainzIntegration();
 const fmt=n=>Number(n).toFixed(1).replace('.',',');
 function toast(s){$('toast').textContent=s;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
 function avg(a){let r=a.filter(t=>t.rating!==null&&t.rating!==''&&Number.isFinite(Number(t.rating)));return r.length?r.reduce((s,t)=>s+Number(t.rating),0)/r.length:null}
@@ -171,7 +263,7 @@ function albumCard(a){let sc=albumScore(a),s=a.status;return '<article class="al
 function renderHome(){
 let completed=albums.filter(a=>a.status==='concluido').length,waiting=albums.filter(a=>a.status==='quero_ouvir'&&!isFuture(a)).length,allRated=albums.map(albumScore).filter(x=>x!==null),overall=allRated.length?allRated.reduce((a,b)=>a+b,0)/allRated.length:null;
 let next=albums.find(a=>a.status==='ouvindo')||albums.find(a=>a.status==='quero_ouvir'&&!isFuture(a));
-return '<section class="hero"><div class="hero-main"><div class="eyebrow">Sua biblioteca musical</div><h2>Uma boa música merece ser lembrada.</h2><p>Organize seus discos, descubra o próximo álbum e registre o que cada faixa despertou.</p><button class="btn primary" id="surpriseBtn">✦ Surpreenda-me</button><svg class="hero-art" viewBox="0 0 180 180" fill="none"><circle cx="90" cy="90" r="78" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="52" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="25" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="6" fill="white"/></svg></div><div class="stats"><div class="stat"><strong>'+albums.length+'</strong><span>Álbuns no acervo</span></div><div class="stat"><strong>'+completed+'</strong><span>Ouvidos</span></div><div class="stat"><strong>'+waiting+'</strong><span>Na fila</span></div><div class="stat"><strong>'+(overall===null?'—':fmt(overall))+'</strong><span>Média dos discos</span></div></div></section>'+
+return '<section class="hero"><div class="hero-main"><div class="eyebrow">Sua biblioteca musical</div><h2>Uma boa música merece ser lembrada.</h2><p>Organize seus discos, descubra o próximo álbum e registre o que cada faixa despertou.</p><button class="btn primary" id="surpriseBtn">✦ Surpreenda-me</button> <button class="btn" id="mbCatalog">Completar acervo</button><svg class="hero-art" viewBox="0 0 180 180" fill="none"><circle cx="90" cy="90" r="78" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="52" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="25" stroke="white" stroke-width="2"/><circle cx="90" cy="90" r="6" fill="white"/></svg></div><div class="stats"><div class="stat"><strong>'+albums.length+'</strong><span>Álbuns no acervo</span></div><div class="stat"><strong>'+completed+'</strong><span>Ouvidos</span></div><div class="stat"><strong>'+waiting+'</strong><span>Na fila</span></div><div class="stat"><strong>'+(overall===null?'—':fmt(overall))+'</strong><span>Média dos discos</span></div></div></section>'+
 '<div class="sectionhead"><div><h2>Continue de onde parou</h2><p>Seu próximo capítulo musical.</p></div></div>'+
 (next?'<div class="detail"><div class="detailhero">'+(cover(next)?'<img src="'+esc(cover(next))+'" alt="">':'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(next.status==='ouvindo'?'Em andamento':'Na sua fila')+'</div><h2>'+esc(next.title)+'</h2><p>'+esc(next.artist)+'</p><div class="row"><button class="btn primary" id="continueBtn" data-id="'+next.id+'">'+(next.status==='ouvindo'?'Abrir avaliação':'Começar a ouvir')+'</button>'+(next.spotify_url?'<a class="btn ghost" href="'+esc(next.spotify_url)+'" target="_blank" rel="noopener">Abrir no Spotify ↗</a>':'')+'</div></div></div></div>':'<div class="empty"><strong>Seu acervo começa aqui.</strong>Cadastre um álbum para escolher sua próxima audição.</div>')+
 '<div class="sectionhead"><div><h2>Adicionados recentemente</h2><p>Os últimos discos que entraram na coleção.</p></div><button class="btn small" id="addAlbumHome">+ Adicionar álbum</button></div>'+
@@ -204,7 +296,7 @@ return '<div class="sectionhead"><div><h2>Ranking dos álbuns</h2><p>Classifica�
 }
 function renderDetail(a){
 let ts=albumTracks(a.id),sc=albumScore(a),rated=ratedCount(a),embed=spotifyEmbed(a.spotify_url);
-return '<div class="sectionhead"><button class="btn ghost small" id="backAlbums">← Voltar</button><div class="toolbar"><button class="btn small" id="spAlbum">Vincular Spotify</button><button class="btn small" id="editAlbum">Editar</button><button class="btn small danger" id="deleteAlbum">Excluir</button></div></div><section class="detail"><div class="detailhero">'+(cover(a)?'<img src="'+esc(cover(a))+'" alt="Capa de '+esc(a.title)+'">':'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(isFuture(a)?'Aguardado':statusLabel(a.status))+'</div><h2>'+esc(a.title)+'</h2><p>'+esc(a.artist)+(a.release_year?' · '+a.release_year:'')+(a.genre?' · '+esc(a.genre):'')+'</p><div class="bigscore">'+(sc===null?'—':fmt(sc))+'<small style="font-size:12px;color:var(--muted)"> / 10</small></div><p>'+rated+' de '+ts.length+' faixas avaliadas</p><div class="row">'+(a.spotify_url?'<a class="btn primary" href="'+esc(a.spotify_url)+'" target="_blank" rel="noopener">'+sp.logo+'Ouvir no Spotify ↗</a>':isFuture(a)?'':'<a class="btn primary" href="'+esc(spotifySearch(a))+'" target="_blank" rel="noopener">Buscar no Spotify ↗</a>')+'<button class="btn small" id="toggleComplete">'+(a.status==='concluido'?'Marcar como ouvindo':'Marcar como concluído')+'</button></div></div></div><div class="sectionhead"><div><h2>Faixas</h2><p>Avalie de 0 a 10. A média considera somente as faixas avaliadas.</p></div><button class="btn small" id="addTracks">+ Adicionar faixas</button></div><div class="tracklist">'+(ts.length?ts.map((t,i)=>'<div class="track"><div class="tracknum">'+(t.position||i+1)+'</div><div class="trackname"><strong>'+esc(t.title)+'</strong><small>'+(t.notes?esc(t.notes):'Toque na nota para avaliar')+'</small></div><input aria-label="Nota de '+esc(t.title)+'" type="number" min="0" max="10" step="0.1" placeholder="—" value="'+(t.rating??'')+'" data-rating="'+t.id+'"><button class="note-btn '+(t.notes?'hasnote':'')+'" title="Anotação" data-tracknote="'+t.id+'">✎</button></div>').join(''):'<div class="empty"><strong>Sem faixas cadastradas.</strong>Adicione as músicas para começar a avaliar o álbum.</div>')+'</div><div class="sectionhead"><div><h2>Suas anotações</h2><p>O que você quer guardar sobre este disco?</p></div></div><div class="field"><textarea id="albumNotes" placeholder="Impressões gerais, melhores momentos, contexto...">'+esc(a.notes||'')+'</textarea></div><button class="btn primary" id="saveAlbumNotes">Salvar anotação</button><div class="sectionhead"><div><h2>Listas</h2><p>Organize este álbum em suas coleções.</p></div></div><div class="checks">'+lists.map(l=>'<label><input type="checkbox" data-albumlist="'+l.id+'" '+(listForAlbum(a.id).some(x=>x.id===l.id)?'checked':'')+'> '+esc(l.name)+'</label>').join('')+'</div></section>'+(embed?'<div class="sectionhead"><div><h2>Ouvir por aqui</h2><p>Player incorporado do Spotify.</p></div></div><div style="border-radius:15px;overflow:hidden"><iframe title="Spotify player" src="'+embed+'" width="100%" height="352" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe></div>':'');
+return '<div class="sectionhead"><button class="btn ghost small" id="backAlbums">← Voltar</button><div class="toolbar"><button class="btn small" id="spAlbum">Vincular Spotify</button><button class="btn small" id="mbAlbum">MusicBrainz</button><button class="btn small" id="editAlbum">Editar</button><button class="btn small danger" id="deleteAlbum">Excluir</button></div></div><section class="detail"><div class="detailhero">'+(cover(a)?'<img src="'+esc(cover(a))+'" alt="Capa de '+esc(a.title)+'">':'<div class="cover placeholder">♫</div>')+'<div><div class="eyebrow">'+(isFuture(a)?'Aguardado':statusLabel(a.status))+'</div><h2>'+esc(a.title)+'</h2><p>'+esc(a.artist)+(a.release_year?' · '+a.release_year:'')+(a.genre?' · '+esc(a.genre):'')+'</p>'+(a.musicbrainz_release_id?'<p class="hint"><a href="https://musicbrainz.org/release/'+esc(a.musicbrainz_release_id)+'" target="_blank" rel="noopener">Edição cadastrada via MusicBrainz</a></p>':'')+'<div class="bigscore">'+(sc===null?'—':fmt(sc))+'<small style="font-size:12px;color:var(--muted)"> / 10</small></div><p>'+rated+' de '+ts.length+' faixas avaliadas</p><div class="row">'+(a.spotify_url?'<a class="btn primary" href="'+esc(a.spotify_url)+'" target="_blank" rel="noopener">'+sp.logo+'Ouvir no Spotify ↗</a>':isFuture(a)?'':'<a class="btn primary" href="'+esc(spotifySearch(a))+'" target="_blank" rel="noopener">Buscar no Spotify ↗</a>')+'<button class="btn small" id="toggleComplete">'+(a.status==='concluido'?'Marcar como ouvindo':'Marcar como concluído')+'</button></div></div></div><div class="sectionhead"><div><h2>Faixas</h2><p>Avalie de 0 a 10. A média considera somente as faixas avaliadas.</p></div><button class="btn small" id="addTracks">+ Adicionar faixas</button></div><div class="tracklist">'+(ts.length?ts.map((t,i)=>'<div class="track"><div class="tracknum">'+(t.position||i+1)+'</div><div class="trackname"><strong>'+esc(t.title)+'</strong><small>'+(t.notes?esc(t.notes):'Toque na nota para avaliar')+'</small></div><input aria-label="Nota de '+esc(t.title)+'" type="number" min="0" max="10" step="0.1" placeholder="—" value="'+(t.rating??'')+'" data-rating="'+t.id+'"><button class="note-btn '+(t.notes?'hasnote':'')+'" title="Anotação" data-tracknote="'+t.id+'">✎</button></div>').join(''):'<div class="empty"><strong>Sem faixas cadastradas.</strong>Adicione as músicas para começar a avaliar o álbum.</div>')+'</div><div class="sectionhead"><div><h2>Suas anotações</h2><p>O que você quer guardar sobre este disco?</p></div></div><div class="field"><textarea id="albumNotes" placeholder="Impressões gerais, melhores momentos, contexto...">'+esc(a.notes||'')+'</textarea></div><button class="btn primary" id="saveAlbumNotes">Salvar anotação</button><div class="sectionhead"><div><h2>Listas</h2><p>Organize este álbum em suas coleções.</p></div></div><div class="checks">'+lists.map(l=>'<label><input type="checkbox" data-albumlist="'+l.id+'" '+(listForAlbum(a.id).some(x=>x.id===l.id)?'checked':'')+'> '+esc(l.name)+'</label>').join('')+'</div></section>'+(embed?'<div class="sectionhead"><div><h2>Ouvir por aqui</h2><p>Player incorporado do Spotify.</p></div></div><div style="border-radius:15px;overflow:hidden"><iframe title="Spotify player" src="'+embed+'" width="100%" height="352" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe></div>':'');
 }
 function render(){
 let m=$('main');
@@ -257,6 +349,8 @@ if(e.target.closest('#surpriseBtn')){surprise();return}
 if(e.target.closest('#continueBtn')){let id=e.target.closest('#continueBtn').dataset.id;let x=albums.find(a=>a.id===id);if(x.status==='quero_ouvir'){let r=await sb.from('discos_albums').update({status:'ouvindo',started_at:new Date().toISOString().slice(0,10)}).eq('id',id).select().single();if(r.error){toast(r.error.message);return}albums=albums.map(a=>a.id===id?r.data:a)}openAlbum(id);return}
 if(e.target.closest('#addPlaylist')){showPlaylistForm();return}
 if(e.target.closest('#backAlbums')){selectedAlbum=null;render();return}
+if(e.target.closest('#mbCatalog')){mb.panel();return}
+if(e.target.closest('#mbAlbum')){mb.panel(albums.find(x=>x.id===selectedAlbum));return}
 if(e.target.closest('#spAlbum')){sp.panel(albums.find(x=>x.id===selectedAlbum));return}
 if(e.target.closest('#editAlbum')){showAlbumForm(albums.find(x=>x.id===selectedAlbum));return}
 if(e.target.closest('#deleteAlbum')){deleteAlbum();return}
@@ -270,8 +364,8 @@ let chip=e.target.closest('[data-list]');if(chip){activeList=chip.dataset.list||
 $('main').onchange=async e=>{if(e.target.matches('[data-rating]'))await saveRating(e.target.dataset.rating,e.target.value);if(e.target.matches('[data-albumlist]'))await setAlbumLists();if(e.target.id==='statusFilter'){let val=e.target.value;let arr=albums.filter(a=>(!val||a.status===val)&&(!query||(a.title+' '+a.artist).toLowerCase().includes(query.toLowerCase())));$('albumGrid').innerHTML=arr.length?arr.map(albumCard).join(''):'<div class="empty">Nenhum álbum neste filtro.</div>'}};
 $('main').oninput=e=>{if(e.target.id==='albumSearch'){query=e.target.value;let arr=albums.filter(a=>(a.title+' '+a.artist).toLowerCase().includes(query.toLowerCase()));$('albumGrid').innerHTML=arr.length?arr.map(albumCard).join(''):'<div class="empty">Nenhum resultado.</div>'}};
 $('spStatus').onclick=()=>sp.panel();
-$('logoutBtn').onclick=async()=>{sp.logout();await sb.auth.signOut();user=null;$('appView').hidden=true;$('authView').hidden=false};
-$('modalback').onclick=e=>{if(e.target===$('modalback'))closeModal()};
+$('logoutBtn').onclick=async()=>{sp.logout();mb.logout();await sb.auth.signOut();user=null;$('appView').hidden=true;$('authView').hidden=false};
+$('modalback').onclick=e=>{if(e.target===$('modalback')&&!sp.isBusy()&&!mb.isBusy())closeModal()};
 
 }
 async function start(u){
